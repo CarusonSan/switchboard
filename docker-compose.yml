@@ -1,0 +1,9 @@
+services:
+  switchboard:
+    build: .
+    container_name: switchboard
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # The bot provisions game servers by driving the host's Docker daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
