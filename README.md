@@ -2,7 +2,31 @@
 
 Discord bot for provisioning and deprovisioning game servers. Each game server runs as a Docker container on the host, with world data persisted to a named volume so servers can be removed and recreated without losing saves.
 
-Supported games out of the box: Minecraft (Java), Valheim, Factorio. Add more by extending `src/games.ts`.
+Supported games out of the box (add more by extending `src/games.ts`):
+
+| Game | Image | Player ports (first instance) | RAM | First boot |
+| --- | --- | --- | --- | --- |
+| Minecraft (Java) | `itzg/minecraft-server` | 25565/tcp | ~3 GB | fast |
+| Valheim | `lloesche/valheim-server` | 2456-2457/udp | ~4 GB | ~1 GB download |
+| Factorio | `factoriotools/factorio` | 34197/udp | ~2 GB | fast |
+| Garry's Mod | `gameservermanagers/gameserver:gmod` | 27015/udp | ~2 GB | ~3-5 GB download |
+| Team Fortress 2 | `cm2network/tf2` | 27015/udp | ~2 GB | ~15-20 GB download |
+| Zombie Panic! Source | `ich777/steamcmd:zombiepanic` | 27015/udp | ~4 GB | ~5-10 GB download |
+| Project Zomboid | `danixu86/project-zomboid-dedicated-server` | 16261-16262, 8766-8767/udp | ~4 GB | fast (game baked into image) |
+| ARK: Survival Evolved | `hermsi/ark-server` | 7777-7778, 27015/udp | 8 GB+ | ~20-25 GB download, slow start |
+| Rust | `didstopia/rust-server` | 28015-28016/udp | 8 GB+ | ~7-10 GB download + map generation |
+| 7 Days to Die | `vinanrra/7dtd-server` | 26900/tcp+udp, 26901-26903/udp | 8 GB+ | ~12-15 GB download |
+
+Game-specific notes:
+
+- **Ports**: most games are told their allocated ports via env, so host and container ports always match and extra instances keep working with the Steam server browser. Garry's Mod and 7 Days to Die have no port env vars, so a *second* instance of those gets NAT-remapped ports — direct `ip:port` connects work, but Steam server-browser discovery breaks for that instance.
+- **RCON / admin ports are never published** (Source RCON on 27015/tcp, ARK 27020/tcp, Rust web RCON 28016/tcp, 7DTD web admin 8080 + telnet 8081). Admin/RCON passwords are generated randomly and not posted to Discord; recover them on the host with `docker inspect <container>` if needed.
+- **Garry's Mod & TF2**: public Steam server-browser listing requires a per-game GSLT token from [Steam game server accounts](https://steamcommunity.com/dev/managegameservers); LAN and direct-IP play work without one (for TF2 set `SRCDS_TOKEN`; for GMod edit the LinuxGSM config in the data volume).
+- **Garry's Mod & 7 Days to Die**: server settings (name, passwords, max players) live in config files inside the data volume (LinuxGSM configs / `sdtdserver.xml`), not env vars — edit them after first boot.
+- **Zombie Panic! Source**: the image ships a `server.cfg` with default passwords (`Docker` / `adminDocker`) — change them in the data volume after first boot.
+- **ARK**: needs ~25 GB free disk per server (the entrypoint enforces this) and can take 5-15 minutes to start even after downloading. Removal uses a 5-minute stop grace so the world saves.
+- **Rust**: Facepunch force-wipes monthly; auto-update is enabled (`RUST_UPDATE_CHECKING=1`) so the server keeps accepting current clients.
+- **Warm pool synergy**: the big-download games benefit most from `WARM_POOL` — a warm member has already finished its multi-GB SteamCMD download and boot by the time someone claims it.
 
 Built for fast spin-up and automatic spin-down:
 
@@ -65,11 +89,7 @@ Register slash commands from inside the container (first deploy only):
 docker compose run --rm switchboard node dist/deploy-commands.js
 ```
 
-Game servers are created as sibling containers on the host (not nested inside the bot's container), so their ports bind directly to the host. For players to connect you need those ports reachable — on a VPS that means the provider firewall; on a home machine it means router port forwarding (or a tunnel like playit.gg if your ISP uses CGNAT). The defaults:
-
-- Minecraft: `25565/tcp` (subsequent instances 25566, ...)
-- Valheim: `2456-2457/udp`
-- Factorio: `34197/udp`
+Game servers are created as sibling containers on the host (not nested inside the bot's container), so their ports bind directly to the host. For players to connect you need those ports reachable — on a VPS that means the provider firewall; on a home machine it means router port forwarding (or a tunnel like playit.gg if your ISP uses CGNAT). First-instance ports per game are listed in the table above; each additional instance of a game takes the next consecutive block (e.g. a second Minecraft server gets 25566).
 
 Set `PUBLIC_HOST` in `.env` to the address players should connect to (VPS IP, home public IP or dynamic-DNS name, or LAN IP for LAN-only play) so the bot posts correct connect addresses. Note that Docker-published ports bypass `ufw` on Ubuntu — Docker manages iptables directly — so don't rely on ufw to gate game ports.
 

@@ -251,16 +251,22 @@ export class DockerProvider implements ServerProvider {
 
     const exposedPorts: Record<string, object> = {};
     const portBindings: Record<string, Array<{ HostPort: string }>> = {};
-    template.ports.forEach((port, i) => {
-      const key = `${port.container}/${port.protocol}`;
-      exposedPorts[key] = {};
-      portBindings[key] = [{ HostPort: String(hostPorts[i]) }];
+    template.ports.forEach((spec, i) => {
+      const containerPort = template.portMode === 'env' ? hostPorts[i] : spec.container;
+      const protocols = spec.protocol === 'both' ? (['tcp', 'udp'] as const) : [spec.protocol];
+      for (const protocol of protocols) {
+        const key = `${containerPort}/${protocol}`;
+        exposedPorts[key] = {};
+        portBindings[key] = [{ HostPort: String(hostPorts[i]) }];
+      }
     });
 
     const container = await this.docker.createContainer({
       name: opts.container,
       Image: template.image,
-      Env: Object.entries(template.env(opts.envName, password)).map(([k, v]) => `${k}=${v}`),
+      Env: Object.entries(template.env(opts.envName, password, hostPorts)).map(
+        ([k, v]) => `${k}=${v}`,
+      ),
       Labels: {
         [LABEL_MANAGED]: 'true',
         [LABEL_GAME]: template.id,

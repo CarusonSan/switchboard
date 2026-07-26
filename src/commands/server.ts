@@ -184,7 +184,8 @@ function connectInfo(info: GameServerInfo): string {
     lines.push(`Connect: ${ports}`);
   }
   if (info.password) {
-    lines.push(`Join password: \`${info.password}\``);
+    const label = games[info.game]?.passwordLabel ?? 'Join password';
+    lines.push(`${label}: \`${info.password}\``);
   }
   return lines.join('\n');
 }
