@@ -1,7 +1,7 @@
-import { randomBytes } from 'node:crypto';
-import Docker from 'dockerode';
-import { config, warmPoolSizes } from '../config.js';
-import { games, type GameTemplate } from '../games.js';
+import { randomBytes } from "node:crypto";
+import Docker from "dockerode";
+import { config, warmPoolSizes } from "../config.js";
+import { type GameTemplate, games } from "../games.js";
 import {
   type CreateResult,
   type GameServerInfo,
@@ -9,21 +9,21 @@ import {
   type RemoveResult,
   type ServerProvider,
   UserError,
-} from './provider.js';
+} from "./provider.js";
 
-const LABEL_MANAGED = 'dev.switchboard.managed';
-const LABEL_GAME = 'dev.switchboard.game';
-const LABEL_PORTS = 'dev.switchboard.ports';
-const LABEL_VOLUME = 'dev.switchboard.volume';
+const LABEL_MANAGED = "dev.switchboard.managed";
+const LABEL_GAME = "dev.switchboard.game";
+const LABEL_PORTS = "dev.switchboard.ports";
+const LABEL_VOLUME = "dev.switchboard.volume";
 // Join password for games that need one. Env vars are baked at creation, so the
 // bot keeps a copy on the container to show the creator; anyone who can read
 // labels already has the Docker socket (root), so this adds no new exposure.
-const LABEL_PASSWORD = 'dev.switchboard.password';
+const LABEL_PASSWORD = "dev.switchboard.password";
 
 // The user-facing server name lives in the container name (labels are immutable,
 // container names are not — claiming a warm pool server is a single rename).
-const CONTAINER_PREFIX = 'sb-';
-const POOL_PREFIX = 'sb-pool-';
+const CONTAINER_PREFIX = "sb-";
+const POOL_PREFIX = "sb-pool-";
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/;
 
@@ -39,9 +39,9 @@ export class DockerProvider implements ServerProvider {
   }
 
   async create(template: GameTemplate, name: string): Promise<CreateResult> {
-    if (!NAME_PATTERN.test(name) || name.startsWith('pool-')) {
+    if (!NAME_PATTERN.test(name) || name.startsWith("pool-")) {
       throw new UserError(
-        'Server names must be 3-32 characters of lowercase letters, numbers, and hyphens, and may not start with `pool-`.',
+        "Server names must be 3-32 characters of lowercase letters, numbers, and hyphens, and may not start with `pool-`.",
       );
     }
     if (await this.findClaimed(name)) {
@@ -57,13 +57,13 @@ export class DockerProvider implements ServerProvider {
         volume: namedVolume,
         envName: name,
       });
-      return { info: await this.status(name), source: 'existing-data' };
+      return { info: await this.status(name), source: "existing-data" };
     }
 
     const warm = await this.takeWarmContainer(template.id, name);
     if (warm) {
       this.replenishPoolSoon();
-      return { info: await this.status(name), source: 'warm-pool' };
+      return { info: await this.status(name), source: "warm-pool" };
     }
 
     await this.coldCreate(template, {
@@ -71,12 +71,12 @@ export class DockerProvider implements ServerProvider {
       volume: namedVolume,
       envName: name,
     });
-    return { info: await this.status(name), source: 'cold' };
+    return { info: await this.status(name), source: "cold" };
   }
 
   async start(name: string): Promise<GameServerInfo> {
     const info = await this.mustFindClaimed(name);
-    if (info.State === 'running') {
+    if (info.State === "running") {
       throw new UserError(`\`${name}\` is already running.`);
     }
     await this.docker.getContainer(info.Id).start();
@@ -85,7 +85,7 @@ export class DockerProvider implements ServerProvider {
 
   async stop(name: string): Promise<GameServerInfo> {
     const info = await this.mustFindClaimed(name);
-    if (info.State !== 'running') {
+    if (info.State !== "running") {
       throw new UserError(`\`${name}\` is not running.`);
     }
     await this.docker.getContainer(info.Id).stop();
@@ -98,7 +98,10 @@ export class DockerProvider implements ServerProvider {
     await this.docker.getContainer(info.Id).remove({ force: true });
     this.idleSamples.delete(info.Id);
     if (deleteData) {
-      await this.docker.getVolume(volume).remove().catch(() => {});
+      await this.docker
+        .getVolume(volume)
+        .remove()
+        .catch(() => {});
     }
     return {
       volume,
@@ -121,9 +124,10 @@ export class DockerProvider implements ServerProvider {
   /** Current warm pool members (for display). */
   async poolStatus(): Promise<Array<{ game: string; state: string }>> {
     const containers = await this.listManaged();
-    return containers
-      .filter(isPool)
-      .map((c) => ({ game: c.Labels[LABEL_GAME] ?? 'unknown', state: c.State }));
+    return containers.filter(isPool).map((c) => ({
+      game: c.Labels[LABEL_GAME] ?? "unknown",
+      state: c.State,
+    }));
   }
 
   /** Pull every game image that isn't already present, so cold creates skip the pull. */
@@ -153,12 +157,12 @@ export class DockerProvider implements ServerProvider {
         const members = pool.filter((c) => c.Labels[LABEL_GAME] === gameId);
 
         for (let i = members.length; i < target; i++) {
-          const suffix = randomBytes(3).toString('hex');
+          const suffix = randomBytes(3).toString("hex");
           console.log(`[pool] warming a ${gameId} server (${suffix})`);
           await this.coldCreate(template, {
             container: `${POOL_PREFIX}${gameId}-${suffix}`,
             volume: `switchboard-pool-${gameId}-${suffix}`,
-            envName: 'switchboard',
+            envName: "switchboard",
           });
         }
 
@@ -168,7 +172,7 @@ export class DockerProvider implements ServerProvider {
       }
 
       for (const member of pool) {
-        const gameId = member.Labels[LABEL_GAME] ?? '';
+        const gameId = member.Labels[LABEL_GAME] ?? "";
         if (!(gameId in warmPoolSizes)) {
           await this.removePoolMember(member);
         }
@@ -184,7 +188,9 @@ export class DockerProvider implements ServerProvider {
    * online" that works across games without game-specific query protocols.
    */
   async reapIdle(): Promise<void> {
-    const running = (await this.listManaged()).filter((c) => !isPool(c) && c.State === 'running');
+    const running = (await this.listManaged()).filter(
+      (c) => !isPool(c) && c.State === "running",
+    );
     const seen = new Set<string>();
 
     for (const container of running) {
@@ -192,17 +198,24 @@ export class DockerProvider implements ServerProvider {
       const cpu = await this.cpuPercent(container.Id).catch(() => null);
       if (cpu === null) continue;
 
-      const count = cpu < config.IDLE_CPU_PERCENT ? (this.idleSamples.get(container.Id) ?? 0) + 1 : 0;
+      const count =
+        cpu < config.IDLE_CPU_PERCENT
+          ? (this.idleSamples.get(container.Id) ?? 0) + 1
+          : 0;
       this.idleSamples.set(container.Id, count);
 
       if (count >= config.IDLE_MINUTES) {
         const name = displayName(container);
-        console.log(`[idle] stopping \`${name}\` — cpu below ${config.IDLE_CPU_PERCENT}% for ${count} minutes`);
+        console.log(
+          `[idle] stopping \`${name}\` — cpu below ${config.IDLE_CPU_PERCENT}% for ${count} minutes`,
+        );
         this.idleSamples.delete(container.Id);
         await this.docker
           .getContainer(container.Id)
           .stop()
-          .catch((error) => console.error(`[idle] failed to stop ${name}:`, error));
+          .catch((error) =>
+            console.error(`[idle] failed to stop ${name}:`, error),
+          );
       }
     }
 
@@ -212,24 +225,29 @@ export class DockerProvider implements ServerProvider {
   }
 
   /** Claim a warm pool server by renaming it; returns false if the pool is empty for this game. */
-  private async takeWarmContainer(gameId: string, name: string): Promise<boolean> {
+  private async takeWarmContainer(
+    gameId: string,
+    name: string,
+  ): Promise<boolean> {
     const pool = (await this.listManaged()).filter(
       (c) => isPool(c) && c.Labels[LABEL_GAME] === gameId,
     );
     // Prefer a running (fully booted) member, but a starting one still beats a cold create.
-    const warm = pool.find((c) => c.State === 'running') ?? pool[0];
+    const warm = pool.find((c) => c.State === "running") ?? pool[0];
     if (!warm) return false;
 
     const container = this.docker.getContainer(warm.Id);
     await container.rename({ name: CONTAINER_PREFIX + name });
-    if (warm.State !== 'running') {
+    if (warm.State !== "running") {
       await container.start().catch(() => {});
     }
     return true;
   }
 
   private replenishPoolSoon(): void {
-    void this.reconcilePool().catch((error) => console.error('[pool] reconcile failed:', error));
+    void this.reconcilePool().catch((error) =>
+      console.error("[pool] reconcile failed:", error),
+    );
   }
 
   private async removePoolMember(member: Docker.ContainerInfo): Promise<void> {
@@ -237,7 +255,10 @@ export class DockerProvider implements ServerProvider {
     await this.docker.getContainer(member.Id).remove({ force: true });
     const volume = member.Labels[LABEL_VOLUME];
     if (volume) {
-      await this.docker.getVolume(volume).remove().catch(() => {});
+      await this.docker
+        .getVolume(volume)
+        .remove()
+        .catch(() => {});
     }
   }
 
@@ -247,13 +268,15 @@ export class DockerProvider implements ServerProvider {
   ): Promise<void> {
     await this.pullImage(template.image);
     const hostPorts = await this.allocatePorts(template);
-    const password = randomBytes(9).toString('base64url');
+    const password = randomBytes(9).toString("base64url");
 
     const exposedPorts: Record<string, object> = {};
     const portBindings: Record<string, Array<{ HostPort: string }>> = {};
     template.ports.forEach((spec, i) => {
-      const containerPort = template.portMode === 'env' ? hostPorts[i] : spec.container;
-      const protocols = spec.protocol === 'both' ? (['tcp', 'udp'] as const) : [spec.protocol];
+      const containerPort =
+        template.portMode === "env" ? hostPorts[i] : spec.container;
+      const protocols =
+        spec.protocol === "both" ? (["tcp", "udp"] as const) : [spec.protocol];
       for (const protocol of protocols) {
         const key = `${containerPort}/${protocol}`;
         exposedPorts[key] = {};
@@ -268,9 +291,9 @@ export class DockerProvider implements ServerProvider {
         ([k, v]) => `${k}=${v}`,
       ),
       Labels: {
-        [LABEL_MANAGED]: 'true',
+        [LABEL_MANAGED]: "true",
         [LABEL_GAME]: template.id,
-        [LABEL_PORTS]: hostPorts.join(','),
+        [LABEL_PORTS]: hostPorts.join(","),
         [LABEL_VOLUME]: opts.volume,
         ...(template.usesPassword ? { [LABEL_PASSWORD]: password } : {}),
       },
@@ -278,7 +301,7 @@ export class DockerProvider implements ServerProvider {
       HostConfig: {
         PortBindings: portBindings,
         Binds: [`${opts.volume}:${template.dataDir}`],
-        RestartPolicy: { Name: 'unless-stopped' },
+        RestartPolicy: { Name: "unless-stopped" },
       },
       StopTimeout: template.stopTimeoutSeconds,
     });
@@ -292,10 +315,13 @@ export class DockerProvider implements ServerProvider {
     });
   }
 
-  private async findClaimed(name: string): Promise<Docker.ContainerInfo | undefined> {
+  private async findClaimed(
+    name: string,
+  ): Promise<Docker.ContainerInfo | undefined> {
     const containers = await this.listManaged();
     return containers.find(
-      (c) => !isPool(c) && c.Names.some((n) => n === `/${CONTAINER_PREFIX}${name}`),
+      (c) =>
+        !isPool(c) && c.Names.some((n) => n === `/${CONTAINER_PREFIX}${name}`),
     );
   }
 
@@ -341,14 +367,20 @@ export class DockerProvider implements ServerProvider {
   }
 
   private async cpuPercent(containerId: string): Promise<number> {
-    const stats = await this.docker.getContainer(containerId).stats({ stream: false });
+    const stats = await this.docker
+      .getContainer(containerId)
+      .stats({ stream: false });
     const cpuDelta =
-      stats.cpu_stats.cpu_usage.total_usage - (stats.precpu_stats.cpu_usage?.total_usage ?? 0);
+      stats.cpu_stats.cpu_usage.total_usage -
+      (stats.precpu_stats.cpu_usage?.total_usage ?? 0);
     const systemDelta =
-      (stats.cpu_stats.system_cpu_usage ?? 0) - (stats.precpu_stats.system_cpu_usage ?? 0);
+      (stats.cpu_stats.system_cpu_usage ?? 0) -
+      (stats.precpu_stats.system_cpu_usage ?? 0);
     if (systemDelta <= 0) return 0;
     const cpus =
-      stats.cpu_stats.online_cpus || stats.cpu_stats.cpu_usage.percpu_usage?.length || 1;
+      stats.cpu_stats.online_cpus ||
+      stats.cpu_stats.cpu_usage.percpu_usage?.length ||
+      1;
     return (cpuDelta / systemDelta) * cpus * 100;
   }
 
@@ -362,13 +394,15 @@ export class DockerProvider implements ServerProvider {
     for (const container of await this.listManaged()) {
       const ports = container.Labels[LABEL_PORTS];
       if (ports) {
-        for (const port of ports.split(',')) used.add(Number(port));
+        for (const port of ports.split(",")) used.add(Number(port));
       }
     }
 
     const blockSize = template.ports.length;
     for (let offset = 0; offset < 100; offset++) {
-      const block = template.ports.map((_, i) => template.basePort + offset * blockSize + i);
+      const block = template.ports.map(
+        (_, i) => template.basePort + offset * blockSize + i,
+      );
       if (block.every((port) => !used.has(port))) return block;
     }
     throw new UserError(`No free ports left for ${template.label} servers.`);
@@ -376,7 +410,7 @@ export class DockerProvider implements ServerProvider {
 }
 
 function rawName(container: Docker.ContainerInfo): string {
-  return container.Names[0]?.slice(1) ?? '';
+  return container.Names[0]?.slice(1) ?? "";
 }
 
 function isPool(container: Docker.ContainerInfo): boolean {
@@ -385,7 +419,9 @@ function isPool(container: Docker.ContainerInfo): boolean {
 
 function displayName(container: Docker.ContainerInfo): string {
   const name = rawName(container);
-  return name.startsWith(CONTAINER_PREFIX) ? name.slice(CONTAINER_PREFIX.length) : name;
+  return name.startsWith(CONTAINER_PREFIX)
+    ? name.slice(CONTAINER_PREFIX.length)
+    : name;
 }
 
 function toInfo(container: Docker.ContainerInfo): GameServerInfo {
@@ -395,13 +431,13 @@ function toInfo(container: Docker.ContainerInfo): GameServerInfo {
       ports.push({
         host: p.PublicPort,
         container: p.PrivatePort,
-        protocol: p.Type === 'udp' ? 'udp' : 'tcp',
+        protocol: p.Type === "udp" ? "udp" : "tcp",
       });
     }
   }
   return {
     name: displayName(container),
-    game: container.Labels[LABEL_GAME] ?? 'unknown',
+    game: container.Labels[LABEL_GAME] ?? "unknown",
     state: container.State,
     status: container.Status,
     ports,

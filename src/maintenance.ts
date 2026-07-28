@@ -1,5 +1,5 @@
-import { config } from './config.js';
-import { dockerProvider } from './provisioning/docker.js';
+import { config } from "./config.js";
+import { dockerProvider } from "./provisioning/docker.js";
 
 const INTERVAL_MS = 60_000;
 
@@ -13,15 +13,21 @@ export function startMaintenance(): void {
   void dockerProvider
     .prePullAll()
     .then(() => dockerProvider.reconcilePool())
-    .catch((error) => console.error('[maintenance] startup tasks failed:', error));
+    .catch((error) =>
+      console.error("[maintenance] startup tasks failed:", error),
+    );
 
   setInterval(() => {
-    void dockerProvider.reconcilePool().catch((error) => console.error('[pool]', error));
+    void dockerProvider
+      .reconcilePool()
+      .catch((error) => console.error("[pool]", error));
   }, INTERVAL_MS);
 
   if (config.IDLE_MINUTES > 0) {
     setInterval(() => {
-      void dockerProvider.reapIdle().catch((error) => console.error('[idle]', error));
+      void dockerProvider
+        .reapIdle()
+        .catch((error) => console.error("[idle]", error));
     }, INTERVAL_MS);
   }
 }

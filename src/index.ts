@@ -1,7 +1,7 @@
-import { Client, Events, GatewayIntentBits, MessageFlags } from 'discord.js';
-import { commands } from './commands/index.js';
-import { config } from './config.js';
-import { startMaintenance } from './maintenance.js';
+import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
+import { commands } from "./commands/index.js";
+import { config } from "./config.js";
+import { startMaintenance } from "./maintenance.js";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -20,7 +20,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await command.execute(interaction);
   } catch (error) {
     console.error(`Error executing /${interaction.commandName}:`, error);
-    const content = 'Something went wrong running that command.';
+    const content = "Something went wrong running that command.";
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply(content).catch(() => {});
     } else {

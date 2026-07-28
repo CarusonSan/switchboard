@@ -1,9 +1,9 @@
-import type { GameTemplate } from '../games.js';
+import type { GameTemplate } from "../games.js";
 
 export interface PortMapping {
   host: number;
   container: number;
-  protocol: 'tcp' | 'udp';
+  protocol: "tcp" | "udp";
 }
 
 export interface GameServerInfo {
@@ -21,11 +21,11 @@ export interface GameServerInfo {
 /** How a create request was fulfilled. */
 export type CreateSource =
   /** Claimed an already-booted server from the warm pool — ready immediately. */
-  | 'warm-pool'
+  | "warm-pool"
   /** Recreated on top of a kept data volume from a previously removed server. */
-  | 'existing-data'
+  | "existing-data"
   /** Created from scratch. */
-  | 'cold';
+  | "cold";
 
 export interface CreateResult {
   info: GameServerInfo;
