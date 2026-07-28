@@ -32,17 +32,30 @@ if (!parsed.success) {
 
 export const config = parsed.data;
 
-export const warmPoolSizes: Record<string, number> = {};
-for (const entry of config.WARM_POOL.split(",")
-  .map((s) => s.trim())
-  .filter(Boolean)) {
-  const [game, count] = entry.split("=");
-  const size = Number(count);
-  if (!game || !(game in games) || !Number.isInteger(size) || size < 0) {
-    console.error(
-      `Invalid WARM_POOL entry "${entry}" — expected <game>=<count> with game one of: ${Object.keys(games).join(", ")}`,
-    );
+/** Parses WARM_POOL's "game=count" pairs; throws on unknown games or bad counts. */
+export function parseWarmPool(raw: string): Record<string, number> {
+  const sizes: Record<string, number> = {};
+  for (const entry of raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)) {
+    const [game, count] = entry.split("=");
+    const size = Number(count);
+    if (!game || !(game in games) || !Number.isInteger(size) || size < 0) {
+      throw new Error(
+        `Invalid WARM_POOL entry "${entry}" — expected <game>=<count> with game one of: ${Object.keys(games).join(", ")}`,
+      );
+    }
+    sizes[game] = size;
+  }
+  return sizes;
+}
+
+export const warmPoolSizes: Record<string, number> = (() => {
+  try {
+    return parseWarmPool(config.WARM_POOL);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
     process.exit(1);
   }
-  warmPoolSizes[game] = size;
-}
+})();
